@@ -13,17 +13,22 @@ PHASES = [random.uniform(0, math.tau) for _ in range(3)]
 
 def sky_color(wave):
     """Return an (r, g, b) sky colour for the current wave, or None for the default."""
-    pass
+    import colorsys 
+    hue = (0.65 + 0.09 * (wave - 1)) % 1.0        # bigger hue jump per wave
+    value = min(0.10 + 0.07 * (wave - 1), 0.50)
+    r, g, b = colorsys.hsv_to_rgb(hue, 0.85, value)
+    return (int(r * 255), int(g * 255), int(b * 255))
 
-
+rescue_popups = []
 def on_humanoid_rescued(humanoid):
     """Called when the player catches a falling humanoid; add a bonus or celebration here."""
+    rescue_popups.append({"x": humanoid.x, "y": humanoid.y, "age": 0.0})
     pass
 
 
 def bonus_life_threshold():
     """Return a score value at which the player earns an extra life, or None to disable bonus lives."""
-    pass
+    return 500
 
 
 def wrap_delta(a, b):
@@ -146,6 +151,9 @@ class Game:
         if self.state != "play":
             return
         player = self.player
+        for p in rescue_popups:
+            p["age"] += dt
+        rescue_popups[:] = [p for p in rescue_popups if p["age"] < 1.0]
         player.update(dt, keys)
         threshold = bonus_life_threshold()
         if threshold and self.score // threshold > self.bonus_awarded:
@@ -203,7 +211,8 @@ class Game:
         blips += [(l.x, l.y, (255, 90, 90) if l.mutant else (230, 200, 60)) for l in self.landers]
         blips.append((self.player.x, self.player.y, (255, 255, 255)))
         for x, y, color in blips:
-            rx = self.screen_x(x) % VIEW_W
+            
+            rx = (x % WORLD_W) / WORLD_W * VIEW_W
             ry = (y - PLAY_TOP) / (VIEW_H - PLAY_TOP) * (RADAR_H - 8) + 4
             pygame.draw.rect(screen, color, (rx - 2, ry - 2, 4, 4))
 
@@ -228,6 +237,11 @@ class Game:
         if player.invulnerable <= 0 or int(player.invulnerable * 10) % 2 == 0:
             f, cx = player.facing, VIEW_W / 2
             pygame.draw.polygon(screen, (240, 240, 250), [(cx + f * 18, player.y), (cx - f * 14, player.y - 8), (cx - f * 14, player.y + 8)])
+        for p in rescue_popups:
+            sx = self.screen_x(p["x"])
+            label = self.font.render("+500", True, (120, 255, 160))
+            label.set_alpha(int(255 * (1 - p["age"])))
+            screen.blit(label, label.get_rect(center=(sx, p["y"] - 20 - p["age"] * 40)))
         self.draw_radar(screen)
         hud = self.font.render(f"Score {self.score}  Lives {self.lives}  Wave {self.wave}  Humanoids {len(self.humanoids)}", True, (240, 240, 240))
         screen.blit(hud, (10, RADAR_H + 4))
